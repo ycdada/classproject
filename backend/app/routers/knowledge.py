@@ -85,6 +85,7 @@ async def extract_knowledge_tree(material_id: int, db: AsyncSession = Depends(ge
                     definition=point.get("definition"),
                     key_terms=point.get("key_terms", []),
                     teaching_emphasis=point.get("teaching_emphasis"),
+                    solution_steps=point.get("solution_steps") or "",
                     source_text=point.get("definition"),
                 )
                 db.add(pt_node)

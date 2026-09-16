@@ -118,8 +118,9 @@ class LLMAdapter:
           "points": [
             {
               "name": "知识点名称",
-              "definition": "知识点定义/解释",
+              "definition": "概念定义原文或紧贴原文的转述",
               "key_terms": ["术语1", "术语2"],
+              "solution_steps": "材料中的解题或算法步骤；没有则空字符串",
               "teaching_emphasis": "教学重点说明"
             }
           ]
@@ -131,9 +132,10 @@ class LLMAdapter:
 规则:
 1. 从材料中提取真实的知识结构，层级为 章→节→知识点
 2. 每个章节必须有 sections, 每个 section 必须有 points
-3. definition 和 teaching_emphasis 可以从材料中总结
+3. definition 和 teaching_emphasis 从材料中总结
 4. key_terms 提取关键术语
-5. 只提取材料中实际包含的内容，不编造"""
+5. solution_steps 只能写材料中讲授的解题或算法步骤原文，不得编造；材料没有就给空字符串
+6. 只提取材料中实际包含的内容，不编造"""
 
         result = await self.chat(system_prompt, f"请提取以下材料的知识树:\n\n{markdown_content[:12000]}")
         return self._parse_json(result)

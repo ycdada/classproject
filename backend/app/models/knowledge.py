@@ -17,5 +17,6 @@ class KnowledgeNode(Base):
     definition: Mapped[str | None] = mapped_column(Text, nullable=True)
     key_terms: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
     teaching_emphasis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    solution_steps: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)

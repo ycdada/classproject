@@ -7,6 +7,7 @@ class KnowledgeNodeUpdate(BaseModel):
     definition: str | None = None
     key_terms: list[str] | None = None
     teaching_emphasis: str | None = None
+    solution_steps: str | None = None
 
 
 class KnowledgeNodeOut(BaseModel):
@@ -19,6 +20,7 @@ class KnowledgeNodeOut(BaseModel):
     definition: str | None
     key_terms: list | None
     teaching_emphasis: str | None
+    solution_steps: str | None = None
     children: list["KnowledgeNodeOut"] = []
 
     model_config = {"from_attributes": True}

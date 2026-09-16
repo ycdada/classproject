@@ -20,5 +20,8 @@
     "doc_dev",
     "doc_slides"
   ],
-  "changed": []
+  "changed": [
+    "material_kind",
+    "knowledge_extract"
+  ]
 }

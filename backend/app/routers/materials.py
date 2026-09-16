@@ -14,10 +14,13 @@ router = APIRouter(prefix="/materials", tags=["materials"])
 parser = FileParser()
 UPLOAD_DIR = "uploads"
 
+ALLOWED_KINDS = {"lecture_notes", "slides", "syllabus", "other"}
+
 
 @router.post("/upload", response_model=MaterialOut)
 async def upload_material(
     file: UploadFile = File(...),
+    kind: str = "other",
     chapter: int | None = None,
     db: AsyncSession = Depends(get_db),
 ):
@@ -28,6 +31,11 @@ async def upload_material(
     ext = file.filename.rsplit(".", 1)[-1].lower()
     if ext not in ("pptx", "docx", "pdf", "md"):
         raise HTTPException(400, f"Unsupported file type: {ext}")
+
+    if not kind:
+        kind = "slides" if ext == "pptx" else "other"
+    if kind not in ALLOWED_KINDS:
+        raise HTTPException(400, f"Invalid kind: {kind}. Allowed: {sorted(ALLOWED_KINDS)}")
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     file_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -43,6 +51,7 @@ async def upload_material(
         filename=file.filename,
         file_type=ext,
         file_path=file_path,
+        kind=kind,
         chapter=chapter,
         content_md=content_md,
         page_count=page_count,

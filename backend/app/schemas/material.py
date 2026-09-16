@@ -6,6 +6,7 @@ class MaterialOut(BaseModel):
     id: int
     filename: str
     file_type: str
+    kind: str = "other"
     chapter: int | None
     content_md: str | None
     page_count: int
@@ -18,6 +19,7 @@ class MaterialListItem(BaseModel):
     id: int
     filename: str
     file_type: str
+    kind: str = "other"
     chapter: int | None
     page_count: int
     uploaded_at: datetime

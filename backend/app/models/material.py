@@ -12,6 +12,8 @@ class Material(Base):
     filename: Mapped[str] = mapped_column(String(200), nullable=False)
     file_type: Mapped[str] = mapped_column(String(10), nullable=False, comment="pptx/docx/pdf/md")
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), default="other",
+                                       comment="lecture_notes/slides/syllabus/other")
     chapter: Mapped[int | None] = mapped_column(Integer, nullable=True)
     content_md: Mapped[str | None] = mapped_column(Text, nullable=True)
     page_count: Mapped[int] = mapped_column(Integer, default=0)
