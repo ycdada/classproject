@@ -24,6 +24,8 @@
     "material_kind",
     "knowledge_extract",
     "scope_builder",
-    "exam_scope_persistence"
+    "exam_scope_persistence",
+    "question_draft",
+    "draft_accept"
   ]
 }
