@@ -22,6 +22,8 @@
   ],
   "changed": [
     "material_kind",
-    "knowledge_extract"
+    "knowledge_extract",
+    "scope_builder",
+    "exam_scope_persistence"
   ]
 }

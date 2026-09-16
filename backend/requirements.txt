@@ -18,3 +18,4 @@ langgraph>=1.0.0
 langgraph-checkpoint-sqlite>=3.0.0
 pytest>=8.0.0
 httpx>=0.24.0
+pytest-asyncio>=0.23.0
