@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -20,8 +20,8 @@ ALLOWED_KINDS = {"lecture_notes", "slides", "syllabus", "other"}
 @router.post("/upload", response_model=MaterialOut)
 async def upload_material(
     file: UploadFile = File(...),
-    kind: str = "other",
-    chapter: int | None = None,
+    kind: str = Form("other"),
+    chapter: int | None = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
     """Upload and parse a teaching material file."""
