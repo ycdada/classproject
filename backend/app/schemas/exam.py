@@ -56,9 +56,12 @@ class ExamListOut(BaseModel):
 
 class ExamRequirements(BaseModel):
     title: str
-    duration: int
-    total_score: int
-    knowledge_node_ids: list[int]
-    question_distribution: dict  # {"choice": 10, "fill": 5, ...}
-    difficulty_distribution: dict  # {"1": 10, "2": 30, ...}
+    duration: int = 120
+    total_score: int = 100
+    teaching_progress: str = ""
+    exam_scope: str = ""
     focus_notes: str = ""
+    material_ids: list[int] = Field(default_factory=list)
+    knowledge_node_ids: list[int] = Field(default_factory=list)  # 仅作备用；考查范围确认后以 scope 为准
+    question_distribution: dict = Field(default_factory=dict)  # {"choice": 10, "fill": 5, ...}
+    difficulty_distribution: dict = Field(default_factory=dict)  # {"1": 10, "2": 30, ...}
