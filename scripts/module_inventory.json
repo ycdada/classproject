@@ -33,6 +33,7 @@
     "material_ui",
     "knowledge_tree_ui",
     "exam_wizard_ui",
-    "exam_preview_export_ui"
+    "exam_preview_export_ui",
+    "question_bank_ui"
   ]
 }

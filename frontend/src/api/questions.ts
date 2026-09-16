@@ -9,7 +9,7 @@ export interface QuestionListResult {
 export async function listQuestions(params: {
   page?: number
   page_size?: number
-  qtype?: QuestionType
+  type?: QuestionType
   difficulty?: number
   chapter?: string
   keyword?: string
@@ -33,11 +33,11 @@ export async function deleteQuestion(id: number): Promise<void> {
 }
 
 export async function searchQuestions(query: string, topK = 20): Promise<Array<Record<string, unknown>>> {
-  const res = await api.post('/questions/search', { query, top_k: topK })
+  const res = await api.get('/questions/search', { params: { query, top_k: topK } })
   return res.data
 }
 
-export async function importQuestions(rows: Array<Partial<Question>>): Promise<{ created: number }> {
-  const res = await api.post('/questions/import', { questions: rows })
+export async function importQuestions(rows: Array<Partial<Question>>): Promise<unknown> {
+  const res = await api.post('/questions/batch-import', { questions: rows })
   return res.data
 }
