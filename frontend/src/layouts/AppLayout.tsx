@@ -9,6 +9,7 @@ import {
   EditOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import ChatDock from '../components/ChatDock'
 
 const { Sider, Header, Content } = Layout
 
@@ -61,6 +62,7 @@ export default function AppLayout() {
           <Outlet />
         </Content>
       </Layout>
+      <ChatDock />
     </Layout>
   )
 }

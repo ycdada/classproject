@@ -34,6 +34,7 @@
     "knowledge_tree_ui",
     "exam_wizard_ui",
     "exam_preview_export_ui",
-    "question_bank_ui"
+    "question_bank_ui",
+    "assistant_ui"
   ]
 }
