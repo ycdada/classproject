@@ -125,6 +125,13 @@ export interface ExamQuestionItem {
 export interface AssembleResponse {
   exam_id: number
   question_count: number
+  questions: Array<{
+    question_id: number
+    score: number
+    sort_order: number
+    type: string
+    content: string
+  }>
   drafts: Array<{ id: number; type: string; content: string; status: string }>
   shortfall: Record<string, number>
   summary: string

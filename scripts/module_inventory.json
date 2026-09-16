@@ -31,6 +31,7 @@
     "chat_graph",
     "chat_http",
     "material_ui",
-    "knowledge_tree_ui"
+    "knowledge_tree_ui",
+    "exam_wizard_ui"
   ]
 }
