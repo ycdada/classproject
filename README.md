@@ -1,50 +1,90 @@
-# 数据结构智能出卷系统（完善版 v3）
+# 数据结构智能出卷系统
 
-纯教师端《数据结构》出卷系统：上传教案 / PPT / 大纲形成课程材料库，抽取知识树（含**解题步骤**），填写**出卷需求**，系统提出**考查范围**供教师审核确认，确认后**组卷**——只从题库装配，题库缺口产生**题目草稿**，教师确认后才入库；预览修改后导出 Word / PDF / TXT 与答题卡。
+面向教师的数据结构课程备课与组卷工具。系统支持课程材料管理、知识树提取、题库维护、考查范围确认、组卷、题目草稿审核，以及试卷预览和导出。
 
-主线：`出卷需求 → ScopeBuilder.propose → 教师确认考查范围 → PaperAssembler.assemble → 试卷 + 题目草稿`。未确认考查范围不得组卷；组卷绝不向题库静默写题。
+## 主要流程
 
-## 目录
+1. 上传课程讲义、课件或大纲，整理为课程材料。
+2. 从材料中提取知识树，包含知识点定义、教学重点和解题步骤。
+3. 填写出卷需求，生成考查范围并由教师确认。
+4. 系统从现有题库装配试卷；题库不足时生成待审核的题目草稿。
+5. 教师审核草稿、调整试卷并导出。
 
+题目草稿经教师确认后才进入题库。组卷不会静默地把模型生成内容写入题库。
+
+## 技术组成
+
+- 前端：React 18、TypeScript、Vite、Ant Design、Zustand
+- 后端：Python 3.11、FastAPI、SQLAlchemy、LangGraph
+- 数据：SQLite、ChromaDB
+- AI：DeepSeek 对话接口；本地中文向量模型用于语义检索
+
+## 项目结构
+
+```text
+backend/       FastAPI 服务、业务模块、数据库模型和测试
+frontend/      React 教师端
+数据结构资料/  课程讲义和课件
+scripts/       项目维护脚本
 ```
-backend/    FastAPI + SQLAlchemy async + ChromaDB + DeepSeek + LangGraph（agent_v2）
-frontend/   React 18 + TypeScript + Vite + Ant Design 5（无 Vue）
-scripts/    30% 差异门度量脚本
-baselines/  冻结差异基线（v2 源码 + 旧学术文稿，只读）
-原文档/     重写后的学术四件套
-docs/adr/   六条不可逆架构决策
-数据结构资料/  课程课件 PPT（保留可重导入）
+
+## 本地启动
+
+首次运行前安装 Python 3.11 和 Node.js LTS。前后端需要分别在两个终端运行。
+
+### 后端
+
+在 PowerShell 中执行：
+
+```powershell
+cd D:\pjt\classproject\backend
+py -3.11 -m venv .venv
+New-Item -ItemType Directory -Force data, uploads
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-## 本地运行
+编辑 `backend\.env`，填入可用的 `DEEPSEEK_API_KEY`。需要 AI 功能时必须配置；不要将密钥提交到版本库。
 
-```bash
-# 后端
-cd backend
-python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
-copy .env.example .env      # 填入 DEEPSEEK_API_KEY
-.venv\Scripts\uvicorn app.main:app --reload --port 8000
+启动服务：
 
-# 前端
-cd frontend
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+```
+
+健康检查地址：<http://localhost:8000/api/health>
+
+### 前端
+
+在另一个 PowerShell 窗口执行：
+
+```powershell
+cd D:\pjt\classproject\frontend
 npm install
 npm run dev
 ```
 
-浏览器打开 `http://localhost:5173`（Vite 代理 `/api` 到 8000）。允许重建本地数据：删除 `backend/data/` 与 `backend/checkpoints.db` 后自动重建 SQLite 与 Chroma。
+浏览器打开 <http://localhost:5173>。Vite 会将 `/api` 请求代理到后端 `http://localhost:8000`。
 
-## 测试与验收
+如果 PowerShell 阻止激活脚本，无需激活虚拟环境；直接使用上面的 `.venv\Scripts\python.exe` 命令即可。
 
-```bash
-cd backend && .venv\Scripts\python -m pytest -v   # 后端测试全绿
-cd frontend && npm run build                       # tsc + vite 构建通过
-python scripts/measure_diff.py                     # 三项差异 ≥ 30%，退出码 0
+## 测试与构建
+
+```powershell
+cd D:\pjt\classproject\backend
+.\.venv\Scripts\python.exe -m pytest -v
 ```
 
-## 文档
+```powershell
+cd D:\pjt\classproject\frontend
+npm run build
+```
 
-- 规格：`.scratch/ds-exam-v3/spec.md`（副本 `docs/superpowers/specs/2026-09-16-ds-exam-v3.md`）
-- 计划：`docs/superpowers/plans/2026-09-16-ds-exam-v3-refactor.md`
-- 领域词：`CONTEXT.md`
-- 运行细节：`原文档/开发文档.docx`
+## 本地数据
+
+- SQLite 数据库：`backend\data\ds_teaching.db`
+- ChromaDB 向量数据：`backend\data\chroma\`
+- 上传文件：`backend\uploads\`
+- LangGraph 检查点：`backend\checkpoints.db`
+
+删除或替换这些文件会影响本机数据；需要重置时请先备份。

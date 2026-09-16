@@ -1,44 +1,34 @@
 {
-  "modules": [
-    "material_kind",
-    "knowledge_extract",
-    "scope_builder",
-    "exam_scope_persistence",
-    "paper_assembler",
-    "question_draft",
-    "draft_accept",
-    "chat_graph",
-    "chat_http",
-    "exam_wizard_ui",
-    "knowledge_tree_ui",
-    "material_ui",
-    "question_bank_ui",
-    "exam_preview_export_ui",
-    "assistant_ui",
-    "doc_plan",
-    "doc_midterm",
-    "doc_dev",
-    "doc_slides"
-  ],
-  "changed": [
-    "material_kind",
-    "knowledge_extract",
-    "scope_builder",
-    "exam_scope_persistence",
-    "question_draft",
-    "draft_accept",
-    "paper_assembler",
-    "chat_graph",
-    "chat_http",
-    "material_ui",
-    "knowledge_tree_ui",
-    "exam_wizard_ui",
-    "exam_preview_export_ui",
-    "question_bank_ui",
-    "assistant_ui",
-    "doc_plan",
-    "doc_midterm",
-    "doc_dev",
-    "doc_slides"
-  ]
+  "application": "数据结构智能出卷系统",
+  "frontend": {
+    "framework": "React",
+    "pages": [
+      "Dashboard",
+      "Drafts",
+      "ExamList",
+      "ExamPreview",
+      "ExamWizard",
+      "KnowledgeTree",
+      "MaterialDetail",
+      "Materials",
+      "QuestionBank"
+    ]
+  },
+  "backend": {
+    "framework": "FastAPI",
+    "routers": [
+      "chat",
+      "drafts",
+      "exams",
+      "knowledge",
+      "materials",
+      "questions",
+      "scopes"
+    ],
+    "router_directory": "backend/app/routers",
+    "service_directory": "backend/app/services"
+  },
+  "verification": {
+    "backend_test_directory": "backend/tests"
+  }
 }

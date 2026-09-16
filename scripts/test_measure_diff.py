@@ -1,53 +1,57 @@
+"""Tests for the current project inventory report."""
+
+import json
+import sys
 from pathlib import Path
-import tempfile, shutil, sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from measure_diff import measure_diff, extract_paragraphs
+import measure_diff
 
 
-def test_identical_trees_fail_threshold():
-    with tempfile.TemporaryDirectory() as d:
-        d = Path(d)
-        (d / "old" / "a.py").parent.mkdir(parents=True)
-        (d / "old" / "a.py").write_text("print(1)\n", encoding="utf-8")
-        shutil.copytree(d / "old", d / "new")
-        (d / "docs_old" / "a.txt").parent.mkdir(parents=True)
-        (d / "docs_old" / "a.txt").write_text("hello world\n" * 20, encoding="utf-8")
-        shutil.copytree(d / "docs_old", d / "docs_new")
-        r = measure_diff(d / "old", d / "docs_old", d / "new", d / "docs_new",
-                         inventory={"modules": ["a", "b", "c"], "changed": []})
-        assert r["source_churn"] < 0.3
-        assert r["pass"] is False
+def test_python_files_excludes_package_initializer(tmp_path):
+    (tmp_path / "alpha.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "notes.txt").write_text("not Python", encoding="utf-8")
+
+    assert [path.name for path in measure_diff.python_files(tmp_path)] == ["alpha.py"]
 
 
-def test_rewritten_source_passes_churn():
-    with tempfile.TemporaryDirectory() as d:
-        d = Path(d)
-        (d / "old" / "a.py").parent.mkdir(parents=True)
-        (d / "old" / "a.py").write_text("print(1)\n" * 50, encoding="utf-8")
-        (d / "new").mkdir()
-        (d / "new" / "b.py").write_text("x = 2\n" * 50, encoding="utf-8")
-        (d / "docs_old" / "a.txt").parent.mkdir(parents=True)
-        (d / "docs_old" / "a.txt").write_text("hello world\n" * 20, encoding="utf-8")
-        (d / "docs_new").mkdir()
-        (d / "docs_new" / "a.txt").write_text("brand new text\n" * 20, encoding="utf-8")
-        r = measure_diff(d / "old", d / "docs_old", d / "new", d / "docs_new",
-                         inventory={"modules": ["a", "b", "c"], "changed": ["a", "b"]})
-        assert r["source_churn"] >= 0.3
-        assert r["module_change"] >= 0.3
-        assert r["doc_rewrite"] >= 0.3
-        assert r["pass"] is True
+def test_route_pattern_counts_supported_http_methods():
+    source = "@router.get('/a')\n@router.post('/b')\n@router.delete('/c')\n"
+
+    assert len(measure_diff.ROUTE_PATTERN.findall(source)) == 3
 
 
-def test_doc_rewrite_uses_paragraph_sets():
-    with tempfile.TemporaryDirectory() as d:
-        d = Path(d)
-        old = d / "old.txt"
-        new = d / "new.txt"
-        old.write_text("段一\n" * 1 + "\n".join(f"旧段落{i}" for i in range(10)), encoding="utf-8")
-        new.write_text("\n".join(f"新段落{i}" for i in range(10)), encoding="utf-8")
-        lines_old = [ln.strip() for ln in old.read_text(encoding="utf-8").splitlines() if ln.strip()]
-        lines_new = [ln.strip() for ln in new.read_text(encoding="utf-8").splitlines() if ln.strip()]
-        overlap = len(set(lines_old) & set(lines_new)) / len(set(lines_old))
-        assert overlap < 0.7
-        assert extract_paragraphs(old) == lines_old
+def test_main_reports_current_inventory(tmp_path, monkeypatch, capsys):
+    routers = tmp_path / "routers"
+    pages = tmp_path / "pages"
+    services = tmp_path / "services"
+    tests = tmp_path / "tests"
+    for directory in (routers, pages, services, tests):
+        directory.mkdir()
+
+    (routers / "questions.py").write_text(
+        "@router.get('/questions')\n@router.post('/questions')\n", encoding="utf-8"
+    )
+    (pages / "QuestionBank.tsx").write_text("export {}\n", encoding="utf-8")
+    (services / "question_service.py").write_text("pass\n", encoding="utf-8")
+    (tests / "test_questions.py").write_text("pass\n", encoding="utf-8")
+    required = tmp_path / "required.py"
+    required.write_text("pass\n", encoding="utf-8")
+
+    monkeypatch.setattr(measure_diff, "ROOT", tmp_path)
+    monkeypatch.setattr(measure_diff, "ROUTERS", routers)
+    monkeypatch.setattr(measure_diff, "PAGES", pages)
+    monkeypatch.setattr(measure_diff, "SERVICES", services)
+    monkeypatch.setattr(measure_diff, "TESTS", tests)
+    monkeypatch.setattr(measure_diff, "REQUIRED_PATHS", [required])
+
+    assert measure_diff.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["router_modules"] == ["questions"]
+    assert report["api_endpoint_count"] == 2
+    assert report["frontend_pages"] == ["QuestionBank"]
+    assert report["service_modules"] == ["question_service"]
+    assert report["backend_test_files"] == ["test_questions.py"]
+    assert report["missing_required_paths"] == []
+    assert report["status"] == "ok"
