@@ -12,7 +12,7 @@ from langgraph.types import interrupt
 from app.services.llm_adapter import LLMAdapter
 from app.services.chat_service import CHAT_SYSTEM_PROMPT, TOOLS
 
-from .tools import search_questions, generate_exam, query_knowledge
+from .tools import search_questions, query_knowledge, propose_scope, assemble_paper
 
 
 ROUTER_SYSTEM_PROMPT = """你是《数据结构》教学助手的意图路由器。阅读用户输入，判断意图并调用对应工具：
@@ -79,13 +79,101 @@ def knowledge_node(state: dict) -> dict:
 
 
 def generate_node(state: dict) -> dict:
+    """组卷意图：先提出考查范围（不直接生成试卷）。"""
     args = state.get("tool_args") or {}
-    result = _run(generate_exam(**args))
+    title = args.get("title", "未命名试卷")
+    scope_text = args.get("scope", "")
+    demand = {
+        "title": title,
+        "teaching_progress": "",
+        "exam_scope": scope_text,
+        "focus_notes": "",
+        "material_ids": [],
+        "question_distribution": {},
+        "difficulty_distribution": {},
+        "total_score": args.get("total_score", 100),
+        "duration": args.get("duration", 120),
+    }
+    result = _run(propose_scope(demand))
     return {
-        "tool_result": result,
-        "exam_paper": result,
-        "review_status": "pending",
+        "tool_result": {"scope_id": result["scope_id"], "message": "已提出考查范围，请确认"},
+        "scope_id": result["scope_id"],
+        "scope_status": result["status"],
+        "scope_tree": result["tree"],
         "next_action": None,
+    }
+
+
+def propose_scope_node(state: dict) -> dict:
+    """提出考查范围节点：ScopeBuilder.propose → scope_review(interrupt)。"""
+    args = state.get("tool_args") or {}
+    demand = args.get("demand") or {
+        "title": args.get("title", "未命名试卷"),
+        "teaching_progress": args.get("teaching_progress", ""),
+        "exam_scope": args.get("exam_scope", ""),
+        "focus_notes": args.get("focus_notes", ""),
+        "material_ids": [],
+        "question_distribution": args.get("question_distribution", {}),
+        "difficulty_distribution": args.get("difficulty_distribution", {}),
+        "total_score": args.get("total_score", 100),
+        "duration": args.get("duration", 120),
+    }
+    result = _run(propose_scope(demand))
+    return {
+        "tool_result": {"scope_id": result["scope_id"], "message": "已提出考查范围，请确认"},
+        "scope_id": result["scope_id"],
+        "scope_status": result["status"],
+        "scope_tree": result["tree"],
+        "next_action": None,
+    }
+
+
+def scope_review_node(state: dict) -> dict:
+    """考查范围审核节点：interrupt 等教师确认；确认后才装配试卷。"""
+    scope_id = state.get("scope_id")
+    if not scope_id:
+        return {"scope_status": "skipped"}
+
+    review = interrupt({
+        "type": "scope_review",
+        "scope_id": scope_id,
+        "tree": state.get("scope_tree", []),
+        "message": "请确认考查范围；确认后系统将按范围组卷",
+    })
+
+    if isinstance(review, dict) and review.get("confirmed"):
+        from app.database import async_session
+        from app.models.scope import ExamScope
+
+        async def _confirm():
+            async with async_session() as db:
+                scope = await db.get(ExamScope, scope_id)
+                if scope and scope.status != "confirmed":
+                    scope.status = "confirmed"
+                    await db.commit()
+
+        _run(_confirm())
+
+        demand = (state.get("tool_args") or {}).get("demand") or state.get("tool_args") or {}
+        try:
+            result = _run(assemble_paper(demand, scope_id))
+        except ValueError as e:
+            return {
+                "scope_status": "confirmed",
+                "tool_result": {"error": str(e), "message": "题库为空且无法拟草稿，请先维护题库或材料"},
+                "next_action": None,
+            }
+        return {
+            "scope_status": "confirmed",
+            "exam_paper": result,
+            "review_status": "pending",
+            "next_action": None,
+        }
+
+    adjustments = review.get("adjustments", "") if isinstance(review, dict) else str(review or "")
+    return {
+        "scope_status": "rejected",
+        "messages": [HumanMessage(content=f"请调整考查范围：{adjustments}")],
     }
 
 
@@ -121,13 +209,23 @@ def chat_node(state: dict) -> dict:
     messages = _to_openai_messages(state.get("messages", []))
     tool_result = state.get("tool_result")
     review_status = state.get("review_status")
+    scope_status = state.get("scope_status")
 
     if review_status == "approved" and state.get("exam_paper"):
+        paper = state["exam_paper"]
+        payload = {
+            "summary": paper.get("summary", ""),
+            "exam_id": paper.get("exam_id"),
+            "question_count": len(paper.get("questions", [])),
+            "drafts": len(paper.get("drafts", [])),
+        }
+        prompt = f"试卷已通过审核，请向老师汇报结果（含草稿提示）：{json.dumps(payload, ensure_ascii=False)}"
+    elif scope_status == "confirmed" and state.get("exam_paper"):
         payload = {
             "summary": state["exam_paper"].get("summary", ""),
-            "question_count": len(state["exam_paper"].get("questions", [])),
+            "exam_id": state["exam_paper"].get("exam_id"),
         }
-        prompt = f"试卷已通过审核，请向老师汇报结果：{json.dumps(payload, ensure_ascii=False)}"
+        prompt = f"考查范围已确认、试卷已装配，请向老师汇报结果：{json.dumps(payload, ensure_ascii=False)}"
     elif tool_result:
         prompt = f"工具执行完毕，请用自然语言向老师汇报结果：{json.dumps(tool_result, ensure_ascii=False)}"
     else:

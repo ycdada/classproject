@@ -1,9 +1,9 @@
 """agent_v2 工具层 — 复用现有服务。
 
-与计划书初稿相比，实际服务的命名与签名如下（此处已对齐）：
 - 语义搜题：QuestionService.search_semantic（内部走 RAGPipeline）
-- 智能组卷：ExamGenerator.generate（需要 AsyncSession）
-- 知识查询：直接查 KnowledgeNode 表（项目中没有独立的 KnowledgeService）
+- 知识查询：直接查 KnowledgeNode 表
+- 组卷：agent_v2.nodes.propose_scope_node 先提出考查范围，确认后由
+  PaperAssembler.assemble 装配（缺题只写题目草稿，不写题库）
 
 这些函数保持 async，由 nodes.py 中的同步节点通过 asyncio.run() 调用。
 """
@@ -12,7 +12,74 @@ from sqlalchemy import select
 from app.database import async_session
 from app.models.knowledge import KnowledgeNode
 from app.services.question_service import QuestionService
-from app.services.exam_generator import ExamGenerator
+from app.services.scope_builder import ScopeBuilder
+from app.services.paper_assembler import PaperAssembler
+from app.services.draft_service import DraftService
+
+
+async def propose_scope(demand: dict) -> dict:
+    """提出考查范围：从出卷需求过滤课程知识树，返回 proposed 范围树。"""
+    async with async_session() as db:
+        scope = await ScopeBuilder(db).propose(demand)
+        from app.models.scope import ExamScopeNode
+        nodes = (await db.execute(
+            select(ExamScopeNode).where(ExamScopeNode.scope_id == scope.id)
+        )).scalars().all()
+
+        def build(parent_id):
+            out = []
+            for n in sorted((x for x in nodes if x.parent_id == parent_id), key=lambda x: x.sort_order):
+                out.append({
+                    "id": n.id, "name": n.name, "node_type": n.node_type,
+                    "definition": n.definition, "key_terms": n.key_terms,
+                    "teaching_emphasis": n.teaching_emphasis,
+                    "solution_steps": n.solution_steps,
+                    "included": n.included, "children": build(n.id),
+                })
+            return out
+
+        return {"scope_id": scope.id, "status": scope.status, "tree": build(None)}
+
+
+async def assemble_paper(demand: dict, scope_id: int) -> dict:
+    """按确认后的考查范围组卷。未确认抛 ValueError('scope_not_confirmed')。"""
+    from app.models.scope import ExamScope
+
+    async with async_session() as db:
+        scope = await db.get(ExamScope, scope_id)
+        if not scope:
+            raise ValueError("scope_not_found")
+        assembler = PaperAssembler(db, rag=None, llm=None, author=None, drafts=DraftService(db))
+        result = await assembler.assemble_with_rag(demand, scope)
+        exam = None
+        if result.questions:
+            from app.models.exam import Exam, ExamQuestion
+            from app.services.paper_assembler import normalize_scores
+            exam = Exam(
+                title=demand.get("title", "未命名试卷"),
+                created_by="teacher",
+                total_score=demand.get("total_score", 100),
+                duration=demand.get("duration", 120),
+                requirements_json=demand,
+                knowledge_snapshot_json=result.scope_snapshot,
+                status="draft",
+            )
+            db.add(exam)
+            await db.flush()
+            for idx, q in enumerate(result.questions):
+                db.add(ExamQuestion(
+                    exam_id=exam.id, question_id=q["question_id"],
+                    score=q["score"], sort_order=idx,
+                ))
+            await db.commit()
+            await db.refresh(exam)
+        return {
+            "exam_id": exam.id if exam else None,
+            "questions": result.questions,
+            "drafts": result.drafts,
+            "shortfall": result.shortfall,
+            "summary": result.summary,
+        }
 
 
 async def search_questions(query: str, type: str | None = None,
@@ -68,37 +135,16 @@ async def generate_exam(title: str, scope: str, choice_count: int = 10,
                         short_answer_count: int = 3, code_count: int = 2,
                         difficulty: int = 3, total_score: int = 100,
                         duration: int = 120) -> dict:
-    """智能组卷：按题型配比生成试卷，返回题目列表与摘要。"""
-    dist = {}
-    for n, qtype in (
-        (choice_count, "choice"),
-        (fill_count, "fill"),
-        (tf_count, "tf"),
-        (short_answer_count, "short_answer"),
-        (code_count, "code"),
-    ):
-        if n:
-            dist[qtype] = n
-
-    requirements = {
+    """组卷意图入口（v3）：先提出考查范围供教师确认，不直接生成试卷。"""
+    demand = {
         "title": title,
-        "knowledge_node_ids": [],
-        "question_distribution": dist,
-        "difficulty": difficulty,
+        "teaching_progress": "",
+        "exam_scope": scope,
+        "focus_notes": "",
+        "material_ids": [],
+        "question_distribution": {},
+        "difficulty_distribution": {},
         "total_score": total_score,
         "duration": duration,
-        "scope": scope,
     }
-
-    async with async_session() as db:
-        gen = ExamGenerator(db)
-        result = await gen.generate(requirements)
-
-    return {
-        "requirements": requirements,
-        "title": title,
-        "total_score": total_score,
-        "duration": duration,
-        "questions": result.get("questions", []),
-        "summary": result.get("summary", ""),
-    }
+    return await propose_scope(demand)

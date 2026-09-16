@@ -18,5 +18,8 @@ class AgentState(TypedDict, total=False):
     next_action: Optional[str]                 # 路由标记：search / generate / knowledge / chat
     tool_args: Optional[dict]                  # 意图识别出的工具调用参数
     tool_result: Optional[dict]                # 工具执行结果
+    scope_id: Optional[int]                    # 提出的考查范围 id
+    scope_status: Optional[str]                # proposed / confirmed
+    scope_tree: Optional[list]                 # 考查范围树（scope_pending 事件数据）
     exam_paper: Optional[dict]                 # 组卷结果（待人工审核）
     review_status: Optional[str]               # pending / approved / rejected / skipped

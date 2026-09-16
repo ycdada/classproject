@@ -8,8 +8,9 @@ from sqlalchemy import select
 from ..database import get_db
 from ..models.exam import Exam, ExamQuestion
 from ..models.question import Question
+from ..models.scope import ExamScope
 from ..schemas.exam import ExamRequirements
-from ..services.exam_generator import ExamGenerator, _normalize_scores
+from ..services.paper_assembler import PaperAssembler, normalize_scores
 from ..services.docx_export import export_exam_to_docx
 from ..services.exam_export import export_exam_to_pdf, export_exam_to_txt
 from ..services.answer_sheet import generate_answer_sheet_pdf
@@ -19,43 +20,66 @@ router = APIRouter(prefix="/exams", tags=["exams"])
 
 @router.post("/generate")
 async def generate_exam(req: ExamRequirements, db: AsyncSession = Depends(get_db)):
-    """Generate an exam based on requirements."""
-    generator = ExamGenerator(db)
-    result = await generator.generate(req.model_dump())
+    """按确认后的考查范围组卷：题库题 + 缺口草稿，不写题库。"""
+    if not req.scope_id:
+        raise HTTPException(status_code=400, detail="scope_id is required")
 
-    questions = result.get("questions", [])
-    if not questions:
-        raise HTTPException(status_code=400, detail="Failed to generate any questions")
+    scope = await db.get(ExamScope, req.scope_id)
+    if not scope:
+        raise HTTPException(status_code=404, detail="Exam scope not found")
+    if scope.status != "confirmed":
+        raise HTTPException(status_code=400, detail="scope_not_confirmed")
 
-    # Normalize scores to ensure sum matches total_score exactly
-    questions = _normalize_scores(questions, req.total_score)
+    demand = req.model_dump()
+    demand.pop("scope_id", None)
 
+    from ..services.draft_service import DraftService
+    from ..services.question_author import DeepSeekAuthor
+
+    try:
+        assembler = PaperAssembler(
+            db, rag=None, llm=None, author=None, drafts=DraftService(db)
+        )
+        result = await assembler.assemble_with_rag(demand, scope)
+    except ValueError as e:
+        msg = str(e)
+        if msg == "scope_not_confirmed":
+            raise HTTPException(status_code=400, detail="scope_not_confirmed")
+        if msg == "no_questions_and_no_drafts":
+            raise HTTPException(status_code=400, detail="no questions matched and no drafts produced")
+        raise
+
+    questions = result.questions
     exam = Exam(
         title=req.title,
         created_by="teacher",
         total_score=req.total_score,
         duration=req.duration,
-        requirements_json=req.model_dump(),
+        requirements_json=demand,
+        knowledge_snapshot_json=result.scope_snapshot,
         status="draft",
     )
     db.add(exam)
     await db.flush()
 
     for idx, q in enumerate(questions):
-        question_id = q.get("question_id")
-        score = q["score"]  # Already normalized
-        if question_id:
-            eq = ExamQuestion(
-                exam_id=exam.id,
-                question_id=question_id,
-                score=score,
-                sort_order=idx,
-            )
-            db.add(eq)
+        eq = ExamQuestion(
+            exam_id=exam.id,
+            question_id=q["question_id"],
+            score=q["score"],
+            sort_order=idx,
+        )
+        db.add(eq)
 
     await db.commit()
     await db.refresh(exam)
-    return {"exam_id": exam.id, "question_count": len(questions)}
+    return {
+        "exam_id": exam.id,
+        "question_count": len(questions),
+        "drafts": result.drafts,
+        "shortfall": result.shortfall,
+        "summary": result.summary,
+    }
 
 
 @router.get("")

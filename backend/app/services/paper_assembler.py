@@ -28,6 +28,7 @@ class AssembleResult:
     drafts: list[dict] = field(default_factory=list)
     shortfall: dict[str, int] = field(default_factory=dict)
     summary: str = ""
+    scope_snapshot: dict = field(default_factory=dict)
 
 
 class QuestionAuthor:
@@ -117,7 +118,42 @@ class PaperAssembler:
             drafts=drafts_out,
             shortfall=shortfall,
             summary=summary,
+            scope_snapshot=self._snapshot(scope_nodes),
         )
+
+    async def assemble_with_rag(self, demand: dict, scope: ExamScope) -> AssembleResult:
+        """HTTP 入口：懒加载生产 RAG（Chroma）后走统一 assemble。"""
+        from .rag import RAGPipeline
+        from .llm_adapter import LLMAdapter
+        from .question_author import DeepSeekAuthor
+
+        if self.rag is None:
+            self.rag = RAGPipeline()
+        if self.llm is None:
+            try:
+                self.llm = LLMAdapter()
+            except Exception as e:
+                print(f"[PaperAssembler] LLMAdapter unavailable: {e}")
+                self.llm = None
+        if self.author is None and self.llm is not None:
+            self.author = DeepSeekAuthor(self.llm)
+        return await self.assemble(demand, scope)
+
+    @staticmethod
+    def _snapshot(scope_nodes: list[ExamScopeNode]) -> dict:
+        def dump(n: ExamScopeNode) -> dict:
+            return {
+                "id": n.id,
+                "name": n.name,
+                "node_type": n.node_type,
+                "definition": n.definition,
+                "key_terms": n.key_terms,
+                "solution_steps": n.solution_steps,
+                "teaching_emphasis": n.teaching_emphasis,
+                "included": n.included,
+            }
+
+        return {"nodes": [dump(n) for n in scope_nodes]}
 
     async def _pick_from_bank(self, qtype: str, context: str, count: int,
                               used_ids: set[int]) -> list[dict]:

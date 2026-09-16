@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
-from .routers import questions, exams, materials, knowledge, chat, chat_v2, scopes, drafts
+from .routers import questions, exams, materials, knowledge, chat, scopes, drafts
 from .services.rag import RAGPipeline
 
 
@@ -37,7 +37,6 @@ app.include_router(knowledge.router, prefix="/api")
 app.include_router(scopes.router, prefix="/api")
 app.include_router(drafts.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
-app.include_router(chat_v2.router, prefix="/api")
 
 
 @app.get("/api/health")

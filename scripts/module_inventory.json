@@ -27,6 +27,8 @@
     "exam_scope_persistence",
     "question_draft",
     "draft_accept",
-    "paper_assembler"
+    "paper_assembler",
+    "chat_graph",
+    "chat_http"
   ]
 }

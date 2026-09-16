@@ -63,5 +63,6 @@ class ExamRequirements(BaseModel):
     focus_notes: str = ""
     material_ids: list[int] = Field(default_factory=list)
     knowledge_node_ids: list[int] = Field(default_factory=list)  # 仅作备用；考查范围确认后以 scope 为准
+    scope_id: int | None = None  # 确认后的考查范围 id；组卷必填
     question_distribution: dict = Field(default_factory=dict)  # {"choice": 10, "fill": 5, ...}
     difficulty_distribution: dict = Field(default_factory=dict)  # {"1": 10, "2": 30, ...}

@@ -1,4 +1,8 @@
-"""AI Chat Service — function calling orchestration + SSE streaming."""
+"""ChatService — 旧版 function-calling 直答路径（v3 已由 agent_v2 单一 LangGraph 取代）。
+
+TOOLS 定义保留给 router prompt 复用；generate 路径已下线——组卷必须先经
+ScopeBuilder 提出考查范围并确认（见 app/services/paper_assembler.py）。
+"""
 import json
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .llm_adapter import LLMAdapter
 from .rag import RAGPipeline
 from .question_service import QuestionService
-from .exam_generator import ExamGenerator
 
 
 CHAT_SYSTEM_PROMPT = """你是一位《数据结构》课程的教学助手，帮助老师出卷、查题、解答知识问题。
@@ -90,10 +93,13 @@ class ChatService:
         self.llm = LLMAdapter()
         self.rag = RAGPipeline()
         self.question_service = QuestionService(db)
-        self.exam_generator = ExamGenerator(db)
 
     async def process_message(self, message: str, history: list[dict]):
-        """Process a user message, return SSE events as dicts."""
+        """Process a user message, return SSE events as dicts.
+
+        组卷意图不再在此直接生成试卷——按 ADR-0006，组卷必须先确认考查范围，
+        由 agent_v2 的 propose_scope → scope_review → assemble 流程处理。
+        """
         messages = history + [{"role": "user", "content": message}]
 
         # Step 1: Determine intent with function calling
@@ -109,7 +115,10 @@ class ChatService:
             if tool_name == "search_questions":
                 result = await self._handle_search(tool_args)
             elif tool_name == "generate_exam":
-                result = await self._handle_generate(tool_args)
+                result = {
+                    "guidance": "组卷需要先确认考查范围。请使用组卷向导，或让我先为您提出考查范围。",
+                    "next_step": "propose_scope",
+                }
             elif tool_name == "query_knowledge":
                 result = await self._handle_query_knowledge(tool_args)
             else:
@@ -154,72 +163,6 @@ class ChatService:
             "count": len(results),
             "results": results[:args.get("count", 10)],
         }
-
-    async def _handle_generate(self, args: dict) -> dict:
-        dist = {}
-        type_map = {
-            "choice_count": "choice", "fill_count": "fill",
-            "tf_count": "tf", "short_answer_count": "short_answer",
-            "code_count": "code",
-        }
-        for key, qtype in type_map.items():
-            count = args.get(key, 0)
-            if count:
-                dist[qtype] = count
-
-        requirements = {
-            "title": args["title"],
-            "knowledge_node_ids": [],
-            "question_distribution": dist,
-            "difficulty": args.get("difficulty", 3),
-            "total_score": args.get("total_score", 100),
-            "duration": args.get("duration", 120),
-            "scope": args["scope"],
-        }
-        result = await self.exam_generator.generate(requirements)
-
-        # Save exam to database so user can view it
-        exam_id = None
-        questions = result.get("questions", [])
-        if questions:
-            try:
-                from ..models.exam import Exam, ExamQuestion
-                exam = Exam(
-                    title=args["title"],
-                    created_by="teacher",
-                    total_score=args.get("total_score", 100),
-                    duration=args.get("duration", 120),
-                    requirements_json=requirements,
-                    status="draft",
-                )
-                self.db.add(exam)
-                await self.db.flush()
-
-                # Normalize scores to match total_score exactly
-                from ..services.exam_generator import _normalize_scores
-                total_score = args.get("total_score", 100)
-                questions = _normalize_scores(questions, total_score)
-
-                for idx, q in enumerate(questions):
-                    question_id = q.get("question_id")
-                    score = q["score"]  # Already normalized
-                    if question_id:
-                        eq = ExamQuestion(
-                            exam_id=exam.id,
-                            question_id=question_id,
-                            score=score,
-                            sort_order=idx,
-                        )
-                        self.db.add(eq)
-
-                await self.db.commit()
-                await self.db.refresh(exam)
-                exam_id = exam.id
-            except Exception as e:
-                print(f"[ChatService] Failed to save exam: {e}")
-
-        result["exam_id"] = exam_id
-        return result
 
     async def _handle_query_knowledge(self, args: dict) -> dict:
         from ..models.knowledge import KnowledgeNode
