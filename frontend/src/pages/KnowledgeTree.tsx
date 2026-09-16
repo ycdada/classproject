@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Descriptions, Input, Select, Space, Spin, Typography, message } from 'antd'
-import { useParams, Link } from 'react-router-dom'
+import { Button, Card, Descriptions, Input, Select, Space, Typography, message } from 'antd'
+import { useParams } from 'react-router-dom'
 import type { KnowledgeNode } from '../types'
-import { extractTree, getTree, updateNode, deleteTree } from '../api/knowledge'
+import { getTree, updateNode, deleteTree } from '../api/knowledge'
 import { listMaterials } from '../api/materials'
 import ScopeTree from '../components/ScopeTree'
 
