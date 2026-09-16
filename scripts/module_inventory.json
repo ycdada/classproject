@@ -26,6 +26,7 @@
     "scope_builder",
     "exam_scope_persistence",
     "question_draft",
-    "draft_accept"
+    "draft_accept",
+    "paper_assembler"
   ]
 }
