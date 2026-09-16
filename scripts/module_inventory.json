@@ -35,6 +35,10 @@
     "exam_wizard_ui",
     "exam_preview_export_ui",
     "question_bank_ui",
-    "assistant_ui"
+    "assistant_ui",
+    "doc_plan",
+    "doc_midterm",
+    "doc_dev",
+    "doc_slides"
   ]
 }
