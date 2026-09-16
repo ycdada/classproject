@@ -30,6 +30,7 @@
     "paper_assembler",
     "chat_graph",
     "chat_http",
-    "material_ui"
+    "material_ui",
+    "knowledge_tree_ui"
   ]
 }
