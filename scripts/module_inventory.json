@@ -29,6 +29,7 @@
     "draft_accept",
     "paper_assembler",
     "chat_graph",
-    "chat_http"
+    "chat_http",
+    "material_ui"
   ]
 }
